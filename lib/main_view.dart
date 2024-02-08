@@ -1,9 +1,11 @@
 import 'dart:convert';
 
+import 'package:dunya_ulkeleri/countries_list_view.dart';
 import 'package:dunya_ulkeleri/country.dart';
-import 'package:dunya_ulkeleri/detail_view.dart';
+import 'package:dunya_ulkeleri/favorites_view.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class MainView extends StatefulWidget {
   const MainView({super.key});
@@ -15,62 +17,52 @@ class MainView extends StatefulWidget {
 class _MainViewState extends State<MainView> {
   final String _apiUrl = 'https://restcountries.com/v3.1/all?fields=name,cca2,capital,region,languages,population,flags';
 
-  final List<dynamic> _countries = [];
+  final List<Country> _countries = [];
+
+  final List<String> _favoriteCountriesCca2 = [];
 
   @override
   void initState() {
     super.initState();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _fetchData();
+      _fetchLocalData().then((value) {
+        _fetchApiData();
+      });
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: _buildAppBar(),
-      body: _buildBody(),
+      appBar: _buildAppBar(context),
+      body: _countries.isEmpty ? const Center(child: CircularProgressIndicator()) : CountriesListView(_countries, _favoriteCountriesCca2),
     );
   }
 
-  AppBar _buildAppBar() {
+  AppBar _buildAppBar(BuildContext context) {
     return AppBar(
       title: const Text('Dünya Ülkeleri'),
       centerTitle: true,
+      actions: [
+        IconButton(
+          onPressed: () {
+            _navigationOnPressed(context, FavoritesView(_countries, _favoriteCountriesCca2));
+          },
+          icon: const Icon(Icons.favorite, color: Colors.red),
+        ),
+      ],
     );
   }
 
-  Widget _buildBody() {
-    return ListView.builder(
-      itemCount: _countries.length,
-      itemBuilder: _buildListItem,
-    );
-  }
-
-  Widget _buildListItem(BuildContext context, int index) {
-    Country country = _countries[index];
-    return Card(
-      child: ListTile(
-        onTap: () {
-          _listTileClick(context, DetailView(country));
-        },
-        leading: CircleAvatar(backgroundImage: NetworkImage(country.flag)),
-        title: Text(country.name),
-        subtitle: Text('Başkent: ${country.capital}'),
-        trailing: const Icon(Icons.favorite_border, color: Colors.red),
-      ),
-    );
-  }
-
-  void _listTileClick(BuildContext context, Widget view) {
+  void _navigationOnPressed(BuildContext context, Widget view) {
     MaterialPageRoute route = MaterialPageRoute(builder: (context) {
       return view;
     });
     Navigator.push(context, route);
   }
 
-  Future<void> _fetchData() async {
+  Future<void> _fetchApiData() async {
     Uri uri = Uri.parse(_apiUrl);
     http.Response response = await http.get(uri);
 
@@ -82,5 +74,17 @@ class _MainViewState extends State<MainView> {
     }
 
     setState(() {});
+  }
+
+  Future<void> _fetchLocalData() async {
+    SharedPreferences preferences = await SharedPreferences.getInstance();
+
+    List<String>? data = preferences.getStringList('favoriteCountries');
+
+    if (data != null) {
+      for (String value in data) {
+        _favoriteCountriesCca2.add(value);
+      }
+    }
   }
 }
